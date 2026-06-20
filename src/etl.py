@@ -1,45 +1,32 @@
+from config import RAW_DATA_PATH, PROCESSED_DATA_PATH
 import pandas as pd
+from utils.logger import get_logger
+
+logger = get_logger("ETL", "etl.log")
 
 def run_etl():
-    # 1. Extraer
-    df = pd.read_csv("data/raw/train.csv")
+    logger.info("Inicio del proceso ETL")
+    try:
+        df = pd.read_csv(RAW_DATA_PATH)
+        logger.debug(f"Datos cargados: {df.shape[0]} filas, {df.shape[1]} columnas")
 
-    # 2. Inspección inicial
-    print("Dimensiones iniciales:", df.shape)
-    print("Columnas:", df.columns.tolist())
+        # Normalización de columnas
+        df.columns = df.columns.str.strip().str.lower().str.replace(" ", "_")
+        logger.debug(f"Columnas normalizadas: {df.columns.tolist()}")
 
-    # 3. Normalización de nombres de columnas
-    df.columns = (
-        df.columns.str.strip()      # quitar espacios
-                 .str.lower()       # pasar a minúsculas
-                 .str.replace(" ", "_")  # reemplazar espacios por guiones bajos
-    )
+        # Manejo de nulos
+        if "precio" in df.columns:
+            df["precio"] = df["precio"].fillna(0)
+        if "cantidad" in df.columns:
+            df["cantidad"] = df["cantidad"].fillna(df["cantidad"].median())
 
-    # 4. Manejo de nulos por columna
-    if "precio" in df.columns:
-        df["precio"] = df["precio"].fillna(0)
+        # Guardar dataset limpio
+        df.to_csv(PROCESSED_DATA_PATH, index=False)
+        logger.info(f"ETL completado. Archivo guardado en {PROCESSED_DATA_PATH}")
+        logger.debug(f"Dimensiones finales: {df.shape}")
 
-    if "cantidad" in df.columns:
-        df["cantidad"] = df["cantidad"].fillna(df["cantidad"].median())
-
-    if "fecha" in df.columns:
-        df["fecha"] = pd.to_datetime(df["fecha"], errors="coerce")
-        df = df.dropna(subset=["fecha"])  # eliminar filas sin fecha válida
-
-    # 5. Eliminación de duplicados
-    df = df.drop_duplicates()
-
-    # 6. Creación de columnas derivadas
-    if "fecha" in df.columns:
-        df["anio"] = df["fecha"].dt.year
-        df["mes"] = df["fecha"].dt.month
-        df["dia"] = df["fecha"].dt.day
-
-    # 7. Guardar dataset limpio
-    df.to_csv("data/processed/ventas_clean.csv", index=False)
-    print("ETL completado. Archivo guardado en data/processed/ventas_clean.csv")
-    print("Dimensiones finales:", df.shape)
+    except Exception as e:
+        logger.error(f"Error en ETL: {e}", exc_info=True)
 
 if __name__ == "__main__":
     run_etl()
-
